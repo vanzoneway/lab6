@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ChoiceBox?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.example.udpchat.ChatController">
+    <top>
+        <VBox spacing="6">
+            <padding>
+                <Insets top="10" right="10" bottom="10" left="10"/>
+            </padding>
+
+            <HBox spacing="10">
+                <Label text="Интерфейс:"/>
+                <ComboBox fx:id="ifaceCombo" prefWidth="260"/>
+                <Label text="IP:"/>
+                <Label fx:id="ipLabel" prefWidth="120"/>
+                <Label text="Mask:"/>
+                <Label fx:id="maskLabel" prefWidth="120"/>
+                <Label text="Broadcast:"/>
+                <Label fx:id="bcastLabel" prefWidth="140"/>
+            </HBox>
+
+            <HBox spacing="10">
+                <Label text="Режим:"/>
+                <ChoiceBox fx:id="modeChoice"/>
+                <Label text="Multicast группа:"/>
+                <TextField fx:id="multicastGroupField" prefWidth="140"/>
+                <Label text="Порт:"/>
+                <TextField fx:id="portField" prefWidth="80"/>
+                <CheckBox fx:id="hostMulticast" text="Я — хост группы"/>
+                <Button fx:id="joinButton" text="Join"/>
+                <Button fx:id="leaveButton" text="Leave"/>
+                <Label text="Ник:"/>
+                <TextField fx:id="nickField" prefWidth="120"/>
+            </HBox>
+        </VBox>
+    </top>
+
+    <center>
+        <SplitPane dividerPositions="0.7">
+            <TabPane fx:id="tabs" tabClosingPolicy="UNAVAILABLE">
+                <Tab fx:id="tabBroadcast" text="Broadcast">
+                    <VBox spacing="6">
+                        <padding>
+                            <Insets top="10" right="10" bottom="10" left="10"/>
+                        </padding>
+                        <TextArea fx:id="chatBroadcast" editable="false" VBox.vgrow="ALWAYS" prefRowCount="20"/>
+                        <HBox spacing="8">
+                            <TextField fx:id="inputBroadcast" HBox.hgrow="ALWAYS" promptText="Сообщение в Broadcast"/>
+                            <Button fx:id="sendBroadcast" text="Отправить" minWidth="120"/>
+                        </HBox>
+                    </VBox>
+                </Tab>
+                <Tab fx:id="tabMulticast" text="Multicast">
+                    <VBox spacing="6">
+                        <padding>
+                            <Insets top="10" right="10" bottom="10" left="10"/>
+                        </padding>
+                        <TextArea fx:id="chatMulticast" editable="false" VBox.vgrow="ALWAYS" prefRowCount="20"/>
+                        <HBox spacing="8">
+                            <TextField fx:id="inputMulticast" HBox.hgrow="ALWAYS" promptText="Сообщение в Multicast-группу"/>
+                            <Button fx:id="sendMulticast" text="Отправить" minWidth="120"/>
+                        </HBox>
+                        <Label fx:id="mutedLabel"
+                               text="Вы заблокированы хостом в этой группе"
+                               textFill="red"
+                               visible="false"
+                               managed="false"/>
+                    </VBox>
+                </Tab>
+            </TabPane>
+
+            <VBox spacing="6">
+                <padding>
+                    <Insets top="10" right="10" bottom="10" left="10"/>
+                </padding>
+                <HBox spacing="8">
+                    <Label text="Участники (IP — ник)" />
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Button fx:id="refreshPeersButton" text="Обновить"/>
+                </HBox>
+                <ListView fx:id="peersList" VBox.vgrow="ALWAYS"/>
+                <Label wrapText="true"
+                       text="ПКМ по участнику: Игнорировать (локально) / Снять игнор. У хоста также: Заблокировать/Разблокировать в группе."/>
+
+                <Separator/>
+
+                <Label text="Забанены (группа)"/>
+                <ListView fx:id="bannedList" VBox.vgrow="ALWAYS"/>
+                <Label wrapText="true"
+                       text="У хоста: ПКМ по списку — «Снять блок (хост)». У обычных участников список только для чтения."/>
+            </VBox>
+        </SplitPane>
+    </center>
+</BorderPane>
