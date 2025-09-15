@@ -13,6 +13,7 @@ public class MainApp extends Application {
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/example/udpchat/main-view.fxml"));
         Parent root = loader.load();
         Scene scene = new Scene(root, 980, 640);
+        scene.getStylesheets().add(getClass().getResource("/com/example/udpchat/application.css").toExternalForm());
         stage.setTitle("UDP P2P Chat (Broadcast & Multicast) — JavaFX");
         stage.setScene(scene);
         stage.show();

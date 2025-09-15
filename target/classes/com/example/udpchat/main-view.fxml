@@ -1,111 +1,131 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import de.jensd.fx.glyphs.fontawesome.FontAwesomeIconView?>
 <?import javafx.geometry.Insets?>
-<?import javafx.scene.control.Button?>
-<?import javafx.scene.control.CheckBox?>
-<?import javafx.scene.control.ChoiceBox?>
-<?import javafx.scene.control.ComboBox?>
-<?import javafx.scene.control.Label?>
-<?import javafx.scene.control.ListView?>
-<?import javafx.scene.control.Separator?>
-<?import javafx.scene.control.SplitPane?>
-<?import javafx.scene.control.Tab?>
-<?import javafx.scene.control.TabPane?>
-<?import javafx.scene.control.TextArea?>
-<?import javafx.scene.control.TextField?>
-<?import javafx.scene.layout.BorderPane?>
-<?import javafx.scene.layout.HBox?>
-<?import javafx.scene.layout.Region?>
-<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
 
-<BorderPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
-            fx:controller="com.example.udpchat.ChatController">
+<BorderPane xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.example.udpchat.ChatController" styleClass="root-pane">
+
     <top>
-        <VBox spacing="6">
+        <VBox styleClass="header-pane">
             <padding>
-                <Insets top="10" right="10" bottom="10" left="10"/>
+                <Insets top="15" right="20" bottom="15" left="20"/>
             </padding>
+            <GridPane hgap="10" vgap="8">
+                <columnConstraints>
+                    <ColumnConstraints halignment="RIGHT"/>
+                    <ColumnConstraints hgrow="ALWAYS" minWidth="200"/>
+                    <ColumnConstraints halignment="RIGHT"/>
+                    <ColumnConstraints hgrow="ALWAYS" minWidth="120"/>
+                    <ColumnConstraints halignment="RIGHT"/>
+                    <ColumnConstraints hgrow="ALWAYS" minWidth="120"/>
+                </columnConstraints>
 
-            <HBox spacing="10">
-                <Label text="Интерфейс:"/>
-                <ComboBox fx:id="ifaceCombo" prefWidth="260"/>
-                <Label text="IP:"/>
-                <Label fx:id="ipLabel" prefWidth="120"/>
-                <Label text="Mask:"/>
-                <Label fx:id="maskLabel" prefWidth="120"/>
-                <Label text="Broadcast:"/>
-                <Label fx:id="bcastLabel" prefWidth="140"/>
-            </HBox>
+                <Label text="Интерфейс:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                <ComboBox fx:id="ifaceCombo" maxWidth="Infinity" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
 
-            <HBox spacing="10">
-                <Label text="Режим:"/>
-                <ChoiceBox fx:id="modeChoice"/>
-                <Label text="Multicast группа:"/>
-                <TextField fx:id="multicastGroupField" prefWidth="140"/>
-                <Label text="Порт:"/>
-                <TextField fx:id="portField" prefWidth="80"/>
+                <Label text="IP:" GridPane.columnIndex="2" GridPane.rowIndex="0"/>
+                <Label fx:id="ipLabel" styleClass="info-label" maxWidth="Infinity" GridPane.columnIndex="3" GridPane.rowIndex="0"/>
+
+                <Label text="Ник:" GridPane.columnIndex="4" GridPane.rowIndex="0"/>
+                <TextField fx:id="nickField" GridPane.columnIndex="5" GridPane.rowIndex="0"/>
+
+                <Label text="Режим:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                <ChoiceBox fx:id="modeChoice" maxWidth="Infinity" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+
+                <Label text="Группа:" GridPane.columnIndex="2" GridPane.rowIndex="1"/>
+                <TextField fx:id="multicastGroupField" GridPane.columnIndex="3" GridPane.rowIndex="1"/>
+
+                <Label text="Порт:" GridPane.columnIndex="4" GridPane.rowIndex="1"/>
+                <TextField fx:id="portField" GridPane.columnIndex="5" GridPane.rowIndex="1"/>
+
+            </GridPane>
+            <HBox alignment="CENTER_LEFT" spacing="15" styleClass="action-bar">
+                <padding>
+                    <Insets top="10"/>
+                </padding>
                 <CheckBox fx:id="hostMulticast" text="Я — хост группы"/>
-                <Button fx:id="joinButton" text="Join"/>
-                <Button fx:id="leaveButton" text="Leave"/>
-                <Label text="Ник:"/>
-                <TextField fx:id="nickField" prefWidth="120"/>
+                <Button fx:id="joinButton" text="Войти в группу">
+                    <graphic>
+                        <FontAwesomeIconView glyphName="SIGN_IN" styleClass="glyph-icon"/>
+                    </graphic>
+                </Button>
+                <Button fx:id="leaveButton" text="Покинуть группу">
+                    <graphic>
+                        <FontAwesomeIconView glyphName="SIGN_OUT" styleClass="glyph-icon"/>
+                    </graphic>
+                </Button>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Label fx:id="bcastLabel" styleClass="info-label-small"/>
             </HBox>
         </VBox>
     </top>
 
     <center>
-        <SplitPane dividerPositions="0.7">
+        <SplitPane dividerPositions="0.75">
             <TabPane fx:id="tabs" tabClosingPolicy="UNAVAILABLE">
-                <Tab fx:id="tabBroadcast" text="Broadcast">
-                    <VBox spacing="6">
-                        <padding>
-                            <Insets top="10" right="10" bottom="10" left="10"/>
-                        </padding>
-                        <TextArea fx:id="chatBroadcast" editable="false" VBox.vgrow="ALWAYS" prefRowCount="20"/>
-                        <HBox spacing="8">
-                            <TextField fx:id="inputBroadcast" HBox.hgrow="ALWAYS" promptText="Сообщение в Broadcast"/>
-                            <Button fx:id="sendBroadcast" text="Отправить" minWidth="120"/>
-                        </HBox>
-                    </VBox>
+                <Tab fx:id="tabBroadcast" text="Broadcast Chat">
+                    <BorderPane>
+                        <center>
+                            <ListView fx:id="chatBroadcast" styleClass="chat-list-view"/>
+                        </center>
+                        <bottom>
+                            <HBox spacing="10" styleClass="input-box">
+                                <TextField fx:id="inputBroadcast" HBox.hgrow="ALWAYS" promptText="Ваше сообщение..."/>
+                                <Button fx:id="sendBroadcast" text="Отправить" styleClass="send-button">
+                                    <graphic>
+                                        <FontAwesomeIconView glyphName="SEND" styleClass="glyph-icon"/>
+                                    </graphic>
+                                </Button>
+                            </HBox>
+                        </bottom>
+                    </BorderPane>
                 </Tab>
-                <Tab fx:id="tabMulticast" text="Multicast">
-                    <VBox spacing="6">
-                        <padding>
-                            <Insets top="10" right="10" bottom="10" left="10"/>
-                        </padding>
-                        <TextArea fx:id="chatMulticast" editable="false" VBox.vgrow="ALWAYS" prefRowCount="20"/>
-                        <HBox spacing="8">
-                            <TextField fx:id="inputMulticast" HBox.hgrow="ALWAYS" promptText="Сообщение в Multicast-группу"/>
-                            <Button fx:id="sendMulticast" text="Отправить" minWidth="120"/>
-                        </HBox>
-                        <Label fx:id="mutedLabel"
-                               text="Вы заблокированы хостом в этой группе"
-                               textFill="red"
-                               visible="false"
-                               managed="false"/>
-                    </VBox>
+                <Tab fx:id="tabMulticast" text="Multicast Chat">
+                    <BorderPane>
+                        <center>
+                            <ListView fx:id="chatMulticast" styleClass="chat-list-view"/>
+                        </center>
+                        <bottom>
+                            <VBox>
+                                <Label fx:id="mutedLabel" text="Вы заблокированы хостом в этой группе"
+                                       styleClass="muted-label" visible="false" managed="false"/>
+                                <HBox spacing="10" styleClass="input-box">
+                                    <TextField fx:id="inputMulticast" HBox.hgrow="ALWAYS"
+                                               promptText="Сообщение в группу..."/>
+                                    <Button fx:id="sendMulticast" text="Отправить" styleClass="send-button">
+                                        <graphic>
+                                            <FontAwesomeIconView glyphName="SEND" styleClass="glyph-icon"/>
+                                        </graphic>
+                                    </Button>
+                                </HBox>
+                            </VBox>
+                        </bottom>
+                    </BorderPane>
                 </Tab>
             </TabPane>
 
-            <VBox spacing="6">
+            <VBox spacing="8" styleClass="sidebar">
                 <padding>
                     <Insets top="10" right="10" bottom="10" left="10"/>
                 </padding>
-                <HBox spacing="8">
-                    <Label text="Участники (IP — ник)" />
+                <HBox alignment="CENTER_LEFT">
+                    <Label text="Участники"/>
                     <Region HBox.hgrow="ALWAYS"/>
-                    <Button fx:id="refreshPeersButton" text="Обновить"/>
+                    <Button fx:id="refreshPeersButton" styleClass="button-transparent">
+                        <graphic>
+                            <FontAwesomeIconView glyphName="REFRESH" styleClass="glyph-icon-small"/>
+                        </graphic>
+                    </Button>
                 </HBox>
                 <ListView fx:id="peersList" VBox.vgrow="ALWAYS"/>
-                <Label wrapText="true"
-                       text="ПКМ по участнику: Игнорировать (локально) / Снять игнор. У хоста также: Заблокировать/Разблокировать в группе."/>
 
                 <Separator/>
 
-                <Label text="Забанены (группа)"/>
-                <ListView fx:id="bannedList" VBox.vgrow="ALWAYS"/>
-                <Label wrapText="true"
-                       text="У хоста: ПКМ по списку — «Снять блок (хост)». У обычных участников список только для чтения."/>
+                <Label text="Забанены (в группе)"/>
+                <ListView fx:id="bannedList" VBox.vgrow="ALWAYS" prefHeight="100"/>
             </VBox>
         </SplitPane>
     </center>

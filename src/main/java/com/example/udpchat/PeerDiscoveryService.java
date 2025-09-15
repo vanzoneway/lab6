@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier; // <-- ИМПОРТ
 
 public class PeerDiscoveryService {
 
@@ -27,7 +28,8 @@ public class PeerDiscoveryService {
     private final ScheduledExecutorService scheduler;
     private final UdpBroadcastService broadcastService;
     private final UdpMulticastService multicastService;
-    private final String nickname;
+    // --- ИЗМЕНЕНИЕ 1: Тип поля изменен со String на Supplier<String> ---
+    private final Supplier<String> nicknameSupplier;
     private final int periodMillis;
     private final PeerListener peerListener;
     private final ModeSelector modeSelector;
@@ -35,12 +37,13 @@ public class PeerDiscoveryService {
     private final Map<String, Long> seenBroadcast = new ConcurrentHashMap<>();
     private final Map<String, Long> seenMulticast = new ConcurrentHashMap<>();
 
-    public PeerDiscoveryService(UdpBroadcastService bcast, UdpMulticastService multi, String nickname,
+    // --- ИЗМЕНЕНИЕ 2: Тип в конструкторе изменен ---
+    public PeerDiscoveryService(UdpBroadcastService bcast, UdpMulticastService multi, Supplier<String> nicknameSupplier,
                                 int periodMillis, PeerListener peerListener,
                                 ModeSelector modeSelector) {
         this.broadcastService = bcast;
         this.multicastService = multi;
-        this.nickname = nickname;
+        this.nicknameSupplier = nicknameSupplier; // <-- Присваивание
         this.periodMillis = periodMillis;
         this.peerListener = peerListener;
         this.modeSelector = modeSelector;
@@ -63,8 +66,13 @@ public class PeerDiscoveryService {
 
     private void sendHelloByMode() {
         Map<String,String> h = new HashMap<>();
-        h.put("nick", nickname);
+        // --- ИЗМЕНЕНИЕ 3: Получаем актуальный ник через .get() ---
+        String currentNick = nicknameSupplier.get();
+        if (currentNick != null && !currentNick.isBlank()) {
+            h.put("nick", currentNick);
+        }
         h.put("id", MessageIds.next());
+
         try {
             if (modeSelector == null || modeSelector.useBroadcast()) {
                 if (broadcastService != null) {
@@ -74,8 +82,11 @@ public class PeerDiscoveryService {
             if (modeSelector == null || modeSelector.useMulticast()) {
                 if (multicastService != null && multicastService.isJoined()) {
                     InetAddress grp = modeSelector.currentMulticastGroup();
-                    if (grp != null) h.put("grp", grp.getHostAddress());
-                    try { multicastService.send(MessageProtocol.TYPE_HELLO, h, ""); } catch (Exception ignored) {}
+                    if (grp != null) {
+                        Map<String, String> mcHeaders = new HashMap<>(h);
+                        mcHeaders.put("grp", grp.getHostAddress());
+                        multicastService.send(MessageProtocol.TYPE_HELLO, mcHeaders, "");
+                    }
                 }
             }
         } catch (Exception ignored) {}
@@ -84,18 +95,20 @@ public class PeerDiscoveryService {
     public void seen(UdpTransport transport, InetAddress addr) {
         String ip = addr.getHostAddress();
         Map<String, Long> map = (transport == UdpTransport.MULTICAST) ? seenMulticast : seenBroadcast;
-        boolean added = !map.containsKey(ip);
-        map.put(ip, System.currentTimeMillis());
-        if (added && peerListener != null) {
+        boolean justAdded = map.putIfAbsent(ip, System.currentTimeMillis()) == null;
+        if (justAdded && peerListener != null) {
             String grp = (transport == UdpTransport.MULTICAST && modeSelector != null && modeSelector.currentMulticastGroup() != null)
                     ? modeSelector.currentMulticastGroup().getHostAddress() : null;
             peerListener.onPeer(ip, true, transport, grp);
+        } else {
+            // Если не только что добавили, просто обновим время
+            map.put(ip, System.currentTimeMillis());
         }
     }
 
     private void reap() {
         long now = System.currentTimeMillis();
-        long timeout = Math.max(60000, periodMillis * 30L);
+        long timeout = Math.max(10000, periodMillis * 5L); // Уменьшил таймаут для быстрого отвала
         reapMap(seenBroadcast, now, timeout, UdpTransport.BROADCAST, null);
         String grp = (modeSelector != null && modeSelector.currentMulticastGroup() != null)
                 ? modeSelector.currentMulticastGroup().getHostAddress() : null;
@@ -105,11 +118,15 @@ public class PeerDiscoveryService {
     private void reapMap(Map<String, Long> map, long now, long timeout, UdpTransport transport, String grp) {
         List<String> toRemove = new ArrayList<>();
         for (Map.Entry<String, Long> e : map.entrySet()) {
-            if ((now - e.getValue()) > timeout) toRemove.add(e.getKey());
+            if ((now - e.getValue()) > timeout) {
+                toRemove.add(e.getKey());
+            }
         }
         for (String ip : toRemove) {
             map.remove(ip);
-            if (peerListener != null) peerListener.onPeer(ip, false, transport, grp);
+            if (peerListener != null) {
+                peerListener.onPeer(ip, false, transport, grp);
+            }
         }
     }
 
