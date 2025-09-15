@@ -10,37 +10,38 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+/**
+ * Manages joining, leaving, sending, and receiving UDP multicast packets.
+ */
 public class UdpMulticastService {
 
     private final int port;
-    private InetAddress group;
-    private final NetworkUtils.IfaceInfo iface;
-    private final UdpMessageListener listener;
+    private InetAddress currentGroup;
+    private final NetworkUtils.InterfaceInfo networkInterface;
+    private final UdpMessageListener messageListener;
 
     private MulticastSocket socket;
-    private ExecutorService exec;
-    private volatile boolean joined = false;
-    private volatile boolean host = false;
-    private int ttl = 1;
+    private ExecutorService networkExecutor;
+    private volatile boolean isJoined = false;
+    private volatile boolean isHost = false;
+    private int timeToLive = 1;
 
-    public UdpMulticastService(int port, InetAddress group, NetworkUtils.IfaceInfo iface,
-                               BlocklistManager ignored,
-                               UdpMessageListener listener) {
+    public UdpMulticastService(int port, InetAddress initialGroup, NetworkUtils.InterfaceInfo networkInterface, UdpMessageListener messageListener) {
         this.port = port;
-        this.group = group;
-        this.iface = iface;
-        this.listener = listener;
+        this.currentGroup = initialGroup;
+        this.networkInterface = networkInterface;
+        this.messageListener = messageListener;
     }
 
-    public synchronized void configureHost(boolean isHost) {
-        this.host = isHost;
+    public synchronized void setHostStatus(boolean isHost) {
+        this.isHost = isHost;
     }
 
     public synchronized void setTtl(int ttl) {
-        this.ttl = Math.max(1, Math.min(ttl, 32));
+        this.timeToLive = Math.max(1, Math.min(ttl, 32));
         if (socket != null && !socket.isClosed()) {
             try {
-                socket.setTimeToLive(this.ttl);
+                socket.setTimeToLive(this.timeToLive);
             } catch (IOException e) {
                 System.err.println("Warning: Could not set TTL on multicast socket.");
                 e.printStackTrace();
@@ -49,104 +50,87 @@ public class UdpMulticastService {
     }
 
     public synchronized boolean isJoined() {
-        return joined;
+        return isJoined;
     }
 
-    public synchronized InetAddress currentGroup() {
-        return group;
-    }
-
-    public synchronized void switchGroup(InetAddress newGroup) throws IOException {
+    public synchronized void joinOrSwitchGroup(InetAddress newGroup) throws IOException {
         if (newGroup == null) throw new IOException("Multicast group cannot be null.");
-        if (joined && group != null && group.equals(newGroup)) return; // Already in the correct group
-        if (joined) leave();
-        this.group = newGroup;
-        join();
+        if (isJoined && currentGroup != null && currentGroup.equals(newGroup)) return;
+        if (isJoined) leaveGroup();
+        this.currentGroup = newGroup;
+        joinGroup();
     }
 
-    public synchronized void join() throws IOException {
-        if (joined) return;
+    private synchronized void joinGroup() throws IOException {
+        if (isJoined) return;
 
-        // Create the socket
         try {
             socket = new MulticastSocket(port);
             System.out.println("[DEBUG] MulticastSocket created successfully on port " + port);
-        } catch (IOException e) {
-            System.err.println("!!! ERROR: Failed to create MulticastSocket on port " + port);
-            e.printStackTrace();
-            throw e;
-        }
 
-        // --- Each setup step is in a separate try-catch for detailed diagnostics ---
-
-        try {
             System.out.println("[DEBUG] -> Configuring: setReuseAddress(true)...");
             socket.setReuseAddress(true);
-        } catch (IOException e) {
-            System.err.println("!!! ERROR during setReuseAddress:");
-            e.printStackTrace();
-            throw e;
-        }
 
-        try {
-            System.out.println("[DEBUG] -> Configuring: setNetworkInterface for " + iface.nif.getDisplayName() + "...");
-            socket.setNetworkInterface(iface.nif);
-        } catch (IOException e) {
-            System.err.println("!!! ERROR during setNetworkInterface. This is likely due to the selected network interface!");
-            e.printStackTrace();
-            throw e;
-        }
+            System.out.println("[DEBUG] -> Configuring: setNetworkInterface for " + networkInterface.nif().getDisplayName() + "...");
+            socket.setNetworkInterface(networkInterface.nif());
 
-        try {
-            System.out.println("[DEBUG] -> Configuring: setTimeToLive(" + ttl + ")...");
-            socket.setTimeToLive(ttl);
-        } catch (IOException e) {
-            System.err.println("!!! ERROR during setTimeToLive:");
-            e.printStackTrace();
-            throw e;
-        }
+            System.out.println("[DEBUG] -> Configuring: setTimeToLive(" + timeToLive + ")...");
+            socket.setTimeToLive(timeToLive);
 
-        try {
             System.out.println("[DEBUG] -> Configuring: setLoopbackMode(false)...");
             socket.setLoopbackMode(false);
-        } catch (Exception e) {
-            System.err.println("!!! WARNING: Failed to disable LoopbackMode (this is not critical)");
-            e.printStackTrace();
-        }
 
-        // Join the multicast group
-        try {
-            System.out.println("[DEBUG] -> Joining group " + group + " via interface " + iface.nif.getName() + "...");
-            socket.joinGroup(new InetSocketAddress(group, port), iface.nif);
+            System.out.println("[DEBUG] -> Joining group " + currentGroup + " via interface " + networkInterface.nif().getName() + "...");
+            socket.joinGroup(new InetSocketAddress(currentGroup, port), networkInterface.nif());
             System.out.println("[DEBUG] -> SUCCESSFULLY joined group.");
+
         } catch (IOException e) {
-            System.err.println("!!! ERROR during joinGroup. Check the group address and firewall settings.");
+            System.err.println("!!! ERROR during multicast socket setup or join.");
             e.printStackTrace();
-            throw e;
+            throw e; // Re-throw to notify the caller
         }
 
-        // Start the listener thread
-        exec = Executors.newSingleThreadExecutor(r -> {
+        networkExecutor = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "UDP-Multicast-Receiver-Thread");
             t.setDaemon(true);
             return t;
         });
-        joined = true;
-        exec.submit(this::recvLoop);
+        isJoined = true;
+        networkExecutor.submit(this::listenForPackets);
     }
 
-    private void recvLoop() {
-        byte[] buf = new byte[2048];
-        DatagramPacket pkt = new DatagramPacket(buf, buf.length);
-        while (joined && socket != null && !socket.isClosed()) {
+    public synchronized void leaveGroup() throws IOException {
+        if (!isJoined) return;
+        isJoined = false;
+        try {
+            if (socket != null) {
+                socket.leaveGroup(new InetSocketAddress(currentGroup, port), networkInterface.nif());
+                System.out.println("[DEBUG] Successfully left group " + currentGroup);
+            }
+        } catch (IOException e) {
+            System.err.println("Error while trying to leave multicast group.");
+            e.printStackTrace();
+        } finally {
+            if (socket != null && !socket.isClosed()) socket.close();
+            if (networkExecutor != null) networkExecutor.shutdownNow();
+            socket = null;
+        }
+    }
+
+    private void listenForPackets() {
+        byte[] buffer = new byte[2048];
+        DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+        while (isJoined && socket != null && !socket.isClosed()) {
             try {
-                socket.receive(pkt);
-                if (listener != null) {
-                    MessageProtocol.Parsed parsed = MessageProtocol.parse(pkt.getData(), pkt.getLength());
-                    if (parsed != null) listener.onMessage(UdpTransport.MULTICAST, pkt.getAddress(), parsed, group);
+                socket.receive(packet);
+                if (messageListener != null) {
+                    MessageProtocol.DecodedMessage decoded = MessageProtocol.decode(packet.getData(), packet.getLength());
+                    if (decoded != null) {
+                        messageListener.onMessageReceived(UdpTransport.MULTICAST, packet.getAddress(), decoded, currentGroup);
+                    }
                 }
             } catch (IOException e) {
-                if (joined) {
+                if (isJoined) {
                     System.err.println("Error receiving multicast packet.");
                     e.printStackTrace();
                 }
@@ -154,30 +138,12 @@ public class UdpMulticastService {
         }
     }
 
-    public synchronized void leave() throws IOException {
-        if (!joined) return;
-        joined = false;
-        try {
-            if (socket != null) {
-                socket.leaveGroup(new InetSocketAddress(group, port), iface.nif);
-                System.out.println("[DEBUG] Successfully left group " + group);
-            }
-        } catch (IOException e) {
-            System.err.println("Error while trying to leave multicast group.");
-            e.printStackTrace();
-        } finally {
-            if (socket != null && !socket.isClosed()) socket.close();
-            if (exec != null) exec.shutdownNow();
-            socket = null;
-        }
-    }
-
     public synchronized void send(String type, Map<String, String> headers, String payload) throws IOException {
-        if (!joined || socket == null) throw new IOException("Not joined to a multicast group");
-        if (host) headers.put("host", "1");
-        headers.put("grp", group.getHostAddress());
-        byte[] data = MessageProtocol.build(type, headers, payload);
-        DatagramPacket pkt = new DatagramPacket(data, data.length, group, port);
-        socket.send(pkt);
+        if (!isJoined || socket == null) throw new IOException("Not joined to a multicast group");
+        if (isHost) headers.put("host", "1");
+        headers.put("grp", currentGroup.getHostAddress());
+        byte[] data = MessageProtocol.encode(type, headers, payload);
+        DatagramPacket packet = new DatagramPacket(data, data.length, currentGroup, port);
+        socket.send(packet);
     }
 }

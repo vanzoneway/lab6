@@ -1,29 +1,59 @@
 // BlocklistManager.java
 package com.example.udpchat;
 
-import java.net.InetAddress;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * Manages a simple, in-memory blocklist of IP addresses.
+ * This class is thread-safe.
+ */
 public class BlocklistManager {
 
-    private final Set<String> blocked = Collections.synchronizedSet(new HashSet<>());
+    private final Set<String> blockedIpSet = Collections.synchronizedSet(new HashSet<>());
 
-    public boolean isBlocked(InetAddress addr) {
-        if (addr == null) return false;
-        return blocked.contains(addr.getHostAddress());
+    /**
+     * Checks if a given IP address is in the blocklist.
+     *
+     * @param ipAddress The IP address string to check.
+     * @return true if the IP is blocked, false otherwise.
+     */
+    public boolean isIpBlocked(String ipAddress) {
+        if (ipAddress == null) {
+            return false;
+        }
+        return blockedIpSet.contains(ipAddress);
     }
 
-    public void block(String ip) {
-        if (ip != null) blocked.add(ip);
+    /**
+     * Adds an IP address to the blocklist.
+     *
+     * @param ipAddress The IP address to block.
+     */
+    public void block(String ipAddress) {
+        if (ipAddress != null && !ipAddress.isBlank()) {
+            blockedIpSet.add(ipAddress);
+        }
     }
 
-    public void unblock(String ip) {
-        if (ip != null) blocked.remove(ip);
+    /**
+     * Removes an IP address from the blocklist.
+     *
+     * @param ipAddress The IP address to unblock.
+     */
+    public void unblock(String ipAddress) {
+        if (ipAddress != null) {
+            blockedIpSet.remove(ipAddress);
+        }
     }
 
-    public Set<String> current() {
-        return new HashSet<>(blocked);
+    /**
+     * Returns a copy of the current set of blocked IP addresses.
+     *
+     * @return A new Set containing all blocked IPs.
+     */
+    public Set<String> getBlockedIpSnapshot() {
+        return new HashSet<>(blockedIpSet);
     }
 }

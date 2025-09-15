@@ -8,65 +8,68 @@ import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.Enumeration;
+import java.util.Collections;
 import java.util.List;
 
+/**
+ * A utility class for network-related operations, like discovering network interfaces.
+ */
 public class NetworkUtils {
 
-    public static class IfaceInfo {
-        public final NetworkInterface nif;
-        public final InetAddress address;
-        public final String netmask;
-        public final InetAddress broadcast;
-
-        public IfaceInfo(NetworkInterface nif, InetAddress address, String netmask, InetAddress broadcast) {
-            this.nif = nif;
-            this.address = address;
-            this.netmask = netmask;
-            this.broadcast = broadcast;
-        }
-
+    /**
+     * A record holding information about a specific network interface.
+     */
+    public record InterfaceInfo(NetworkInterface nif, InetAddress address, String netmask, InetAddress broadcast) {
         @Override
         public String toString() {
             return nif.getDisplayName() + " - " + address.getHostAddress();
         }
     }
 
-    public static List<IfaceInfo> enumerateIPv4Interfaces() throws SocketException {
-        List<IfaceInfo> list = new ArrayList<>();
-        Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces();
-        while (en.hasMoreElements()) {
-            NetworkInterface nif = en.nextElement();
+    /**
+     * Enumerates all active, non-loopback, non-virtual IPv4 network interfaces.
+     *
+     * @return A list of InterfaceInfo objects.
+     * @throws SocketException if an I/O error occurs.
+     */
+    public static List<InterfaceInfo> getActiveIPv4Interfaces() throws SocketException {
+        List<InterfaceInfo> interfaceList = new ArrayList<>();
+        for (NetworkInterface nif : Collections.list(NetworkInterface.getNetworkInterfaces())) {
             try {
-                if (!nif.isUp() || nif.isLoopback() || nif.isVirtual()) continue;
-            } catch (SocketException ex) {
-                // Ignore interfaces that cause exceptions on inspection
-                continue;
-            }
-            for (InterfaceAddress ia : nif.getInterfaceAddresses()) {
-                InetAddress addr = ia.getAddress();
-                if (!(addr instanceof Inet4Address)) continue;
-                list.add(new IfaceInfo(nif, addr,
-                        prefixLengthToNetmask(ia.getNetworkPrefixLength()),
-                        ia.getBroadcast()));
+                if (nif.isUp() && !nif.isLoopback() && !nif.isVirtual()) {
+                    for (InterfaceAddress ifaceAddr : nif.getInterfaceAddresses()) {
+                        if (ifaceAddr.getAddress() instanceof Inet4Address) {
+                            interfaceList.add(new InterfaceInfo(
+                                    nif,
+                                    ifaceAddr.getAddress(),
+                                    convertPrefixLengthToNetmask(ifaceAddr.getNetworkPrefixLength()),
+                                    ifaceAddr.getBroadcast()
+                            ));
+                        }
+                    }
+                }
+            } catch (SocketException e) {
+                // Ignore interfaces that cause errors during inspection
+                System.err.println("Could not inspect network interface: " + nif.getDisplayName());
+                e.printStackTrace();
             }
         }
-        return list;
+        return interfaceList;
     }
 
-    private static String prefixLengthToNetmask(short prefix) {
+    private static String convertPrefixLengthToNetmask(short prefixLength) {
         try {
-            int value = 0xffffffff << (32 - prefix);
-            byte[] bytes = new byte[]{
-                    (byte) (value >>> 24),
-                    (byte) (value >> 16 & 0xff),
-                    (byte) (value >> 8 & 0xff),
-                    (byte) (value & 0xff)
+            int netmaskInt = 0xFFFFFFFF << (32 - prefixLength);
+            byte[] netmaskBytes = new byte[]{
+                    (byte) (netmaskInt >>> 24),
+                    (byte) (netmaskInt >> 16 & 0xFF),
+                    (byte) (netmaskInt >> 8 & 0xFF),
+                    (byte) (netmaskInt & 0xFF)
             };
-            return InetAddress.getByAddress(bytes).getHostAddress();
+            return InetAddress.getByAddress(netmaskBytes).getHostAddress();
         } catch (UnknownHostException e) {
             e.printStackTrace();
-            return "0.0.0.0";
+            return "0.0.0.0"; // Fallback
         }
     }
 }

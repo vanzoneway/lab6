@@ -5,8 +5,9 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
+<!-- Controller name is specified in FXML for clarity, ensure it matches your file -->
 <BorderPane xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1"
-            fx:controller="com.example.udpchat.ChatController" styleClass="root-pane">
+            fx:controller="com.example.udpchat.ChatFxmlUI" styleClass="root-pane">
 
     <top>
         <VBox styleClass="header-pane">
@@ -24,16 +25,16 @@
                 </columnConstraints>
 
                 <Label text="Interface:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
-                <ComboBox fx:id="ifaceCombo" maxWidth="Infinity" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
+                <ComboBox fx:id="networkInterfaceComboBox" maxWidth="Infinity" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
 
                 <Label text="IP:" GridPane.columnIndex="2" GridPane.rowIndex="0"/>
-                <Label fx:id="ipLabel" styleClass="info-label" maxWidth="Infinity" GridPane.columnIndex="3" GridPane.rowIndex="0"/>
+                <Label fx:id="localIpLabel" styleClass="info-label" maxWidth="Infinity" GridPane.columnIndex="3" GridPane.rowIndex="0"/>
 
                 <Label text="Nickname:" GridPane.columnIndex="4" GridPane.rowIndex="0"/>
-                <TextField fx:id="nickField" GridPane.columnIndex="5" GridPane.rowIndex="0"/>
+                <TextField fx:id="nicknameField" GridPane.columnIndex="5" GridPane.rowIndex="0"/>
 
                 <Label text="Mode:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
-                <ChoiceBox fx:id="modeChoice" maxWidth="Infinity" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+                <ChoiceBox fx:id="modeSelectionBox" maxWidth="Infinity" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
 
                 <Label text="Group:" GridPane.columnIndex="2" GridPane.rowIndex="1"/>
                 <TextField fx:id="multicastGroupField" GridPane.columnIndex="3" GridPane.rowIndex="1"/>
@@ -46,35 +47,35 @@
                 <padding>
                     <Insets top="10"/>
                 </padding>
-                <CheckBox fx:id="hostMulticast" text="I am the group host"/>
-                <Button fx:id="joinButton" text="Join Group">
+                <CheckBox fx:id="isHostCheckBox" text="I am the group host"/>
+                <Button fx:id="joinGroupButton" text="Join Group">
                     <graphic>
                         <FontAwesomeIconView glyphName="SIGN_IN" styleClass="glyph-icon"/>
                     </graphic>
                 </Button>
-                <Button fx:id="leaveButton" text="Leave Group">
+                <Button fx:id="leaveGroupButton" text="Leave Group">
                     <graphic>
                         <FontAwesomeIconView glyphName="SIGN_OUT" styleClass="glyph-icon"/>
                     </graphic>
                 </Button>
                 <Region HBox.hgrow="ALWAYS"/>
-                <Label fx:id="bcastLabel" styleClass="info-label-small"/>
+                <Label fx:id="broadcastAddressLabel" styleClass="info-label-small"/>
             </HBox>
         </VBox>
     </top>
 
     <center>
         <SplitPane dividerPositions="0.75">
-            <TabPane fx:id="tabs" tabClosingPolicy="UNAVAILABLE">
-                <Tab fx:id="tabBroadcast" text="Broadcast Chat">
+            <TabPane fx:id="modeTabPane" tabClosingPolicy="UNAVAILABLE">
+                <Tab fx:id="broadcastTab" text="Broadcast Chat">
                     <BorderPane>
                         <center>
-                            <ListView fx:id="chatBroadcast" styleClass="chat-list-view"/>
+                            <ListView fx:id="broadcastChatListView" styleClass="chat-list-view"/>
                         </center>
                         <bottom>
                             <HBox spacing="10" styleClass="input-box">
-                                <TextField fx:id="inputBroadcast" HBox.hgrow="ALWAYS" promptText="Your message..."/>
-                                <Button fx:id="sendBroadcast" text="Send" styleClass="send-button">
+                                <TextField fx:id="broadcastInputField" HBox.hgrow="ALWAYS" promptText="Your message..."/>
+                                <Button fx:id="sendBroadcastButton" text="Send" styleClass="send-button">
                                     <graphic>
                                         <FontAwesomeIconView glyphName="SEND" styleClass="glyph-icon"/>
                                     </graphic>
@@ -83,19 +84,19 @@
                         </bottom>
                     </BorderPane>
                 </Tab>
-                <Tab fx:id="tabMulticast" text="Multicast Chat">
+                <Tab fx:id="multicastTab" text="Multicast Chat">
                     <BorderPane>
                         <center>
-                            <ListView fx:id="chatMulticast" styleClass="chat-list-view"/>
+                            <ListView fx:id="multicastChatListView" styleClass="chat-list-view"/>
                         </center>
                         <bottom>
                             <VBox>
-                                <Label fx:id="mutedLabel" text="You have been banned by the host in this group"
+                                <Label fx:id="mutedStatusLabel" text="You have been banned by the host in this group"
                                        styleClass="muted-label" visible="false" managed="false"/>
                                 <HBox spacing="10" styleClass="input-box">
-                                    <TextField fx:id="inputMulticast" HBox.hgrow="ALWAYS"
+                                    <TextField fx:id="multicastInputField" HBox.hgrow="ALWAYS"
                                                promptText="Message to group..."/>
-                                    <Button fx:id="sendMulticast" text="Send" styleClass="send-button">
+                                    <Button fx:id="sendMulticastButton" text="Send" styleClass="send-button">
                                         <graphic>
                                             <FontAwesomeIconView glyphName="SEND" styleClass="glyph-icon"/>
                                         </graphic>
@@ -114,18 +115,18 @@
                 <HBox alignment="CENTER_LEFT">
                     <Label text="Participants"/>
                     <Region HBox.hgrow="ALWAYS"/>
-                    <Button fx:id="refreshPeersButton" styleClass="button-transparent">
+                    <Button fx:id="refreshParticipantsButton" styleClass="button-transparent">
                         <graphic>
                             <FontAwesomeIconView glyphName="REFRESH" styleClass="glyph-icon-small"/>
                         </graphic>
                     </Button>
                 </HBox>
-                <ListView fx:id="peersList" VBox.vgrow="ALWAYS"/>
+                <ListView fx:id="participantsListView" VBox.vgrow="ALWAYS"/>
 
                 <Separator/>
 
                 <Label text="Banned (in group)"/>
-                <ListView fx:id="bannedList" VBox.vgrow="ALWAYS" prefHeight="100"/>
+                <ListView fx:id="bannedUsersListView" VBox.vgrow="ALWAYS" prefHeight="100"/>
             </VBox>
         </SplitPane>
     </center>
