@@ -63,15 +63,64 @@ public class UdpMulticastService {
 
     public synchronized void join() throws IOException {
         if (joined) return;
-        socket = new MulticastSocket(port);
-        socket.setReuseAddress(true);
-        socket.setNetworkInterface(iface.nif);
-        socket.setTimeToLive(ttl);
+
+        // Создаем сокет
         try {
-            socket.setLoopbackMode(false);
-        } catch (Exception ignored) {
+            socket = new MulticastSocket(port);
+            System.out.println("[DEBUG] MulticastSocket успешно создан на порту " + port);
+        } catch (IOException e) {
+            System.err.println("!!! ОШИБКА: Не удалось создать MulticastSocket на порту " + port);
+            e.printStackTrace();
+            throw e;
         }
-        socket.joinGroup(new InetSocketAddress(group, port), iface.nif);
+
+        // --- Каждая настройка будет в отдельном try-catch для детальной диагностики ---
+
+        try {
+            System.out.println("[DEBUG] -> Настройка: setReuseAddress(true)...");
+            socket.setReuseAddress(true);
+        } catch (IOException e) {
+            System.err.println("!!! ОШИБКА на этапе setReuseAddress:");
+            e.printStackTrace();
+            throw e;
+        }
+
+        try {
+            System.out.println("[DEBUG] -> Настройка: setNetworkInterface для " + iface.nif.getDisplayName() + "...");
+            socket.setNetworkInterface(iface.nif);
+        } catch (IOException e) {
+            System.err.println("!!! ОШИБКА на этапе setNetworkInterface. Вероятно, проблема в выбранном сетевом интерфейсе!");
+            e.printStackTrace();
+            throw e;
+        }
+
+        try {
+            System.out.println("[DEBUG] -> Настройка: setTimeToLive(" + ttl + ")...");
+            socket.setTimeToLive(ttl);
+        } catch (IOException e) {
+            System.err.println("!!! ОШИБКА на этапе setTimeToLive:");
+            e.printStackTrace();
+            throw e;
+        }
+
+        try {
+            System.out.println("[DEBUG] -> Настройка: setLoopbackMode(false)...");
+            socket.setLoopbackMode(false);
+        } catch (Exception e) {
+            System.err.println("!!! ПРЕДУПРЕЖДЕНИЕ: Не удалось отключить LoopbackMode (не критично)");
+            e.printStackTrace();
+        }
+
+        // Присоединение к группе
+        try {
+            System.out.println("[DEBUG] -> Присоединение к группе " + group + " через интерфейс " + iface.nif.getName() + "...");
+            socket.joinGroup(new InetSocketAddress(group, port), iface.nif);
+            System.out.println("[DEBUG] -> УСПЕШНО присоединились к группе.");
+        } catch (IOException e) {
+            System.err.println("!!! ОШИБКА на этапе joinGroup. Проверьте адрес группы и настройки брандмауэра.");
+            e.printStackTrace();
+            throw e;
+        }
 
         exec = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "UDP-Multicast-Receiver");
@@ -103,6 +152,7 @@ public class UdpMulticastService {
         joined = false;
         try {
             socket.leaveGroup(new InetSocketAddress(group, port), iface.nif);
+            System.out.println("[DEBUG] Успешно покинули группу " + group);
         } finally {
             if (socket != null && !socket.isClosed()) socket.close();
             if (exec != null) exec.shutdownNow();
