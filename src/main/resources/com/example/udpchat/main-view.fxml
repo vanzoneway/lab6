@@ -23,22 +23,22 @@
                     <ColumnConstraints hgrow="ALWAYS" minWidth="120"/>
                 </columnConstraints>
 
-                <Label text="Интерфейс:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                <Label text="Interface:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
                 <ComboBox fx:id="ifaceCombo" maxWidth="Infinity" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
 
                 <Label text="IP:" GridPane.columnIndex="2" GridPane.rowIndex="0"/>
                 <Label fx:id="ipLabel" styleClass="info-label" maxWidth="Infinity" GridPane.columnIndex="3" GridPane.rowIndex="0"/>
 
-                <Label text="Ник:" GridPane.columnIndex="4" GridPane.rowIndex="0"/>
+                <Label text="Nickname:" GridPane.columnIndex="4" GridPane.rowIndex="0"/>
                 <TextField fx:id="nickField" GridPane.columnIndex="5" GridPane.rowIndex="0"/>
 
-                <Label text="Режим:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                <Label text="Mode:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
                 <ChoiceBox fx:id="modeChoice" maxWidth="Infinity" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
 
-                <Label text="Группа:" GridPane.columnIndex="2" GridPane.rowIndex="1"/>
+                <Label text="Group:" GridPane.columnIndex="2" GridPane.rowIndex="1"/>
                 <TextField fx:id="multicastGroupField" GridPane.columnIndex="3" GridPane.rowIndex="1"/>
 
-                <Label text="Порт:" GridPane.columnIndex="4" GridPane.rowIndex="1"/>
+                <Label text="Port:" GridPane.columnIndex="4" GridPane.rowIndex="1"/>
                 <TextField fx:id="portField" GridPane.columnIndex="5" GridPane.rowIndex="1"/>
 
             </GridPane>
@@ -46,13 +46,13 @@
                 <padding>
                     <Insets top="10"/>
                 </padding>
-                <CheckBox fx:id="hostMulticast" text="Я — хост группы"/>
-                <Button fx:id="joinButton" text="Войти в группу">
+                <CheckBox fx:id="hostMulticast" text="I am the group host"/>
+                <Button fx:id="joinButton" text="Join Group">
                     <graphic>
                         <FontAwesomeIconView glyphName="SIGN_IN" styleClass="glyph-icon"/>
                     </graphic>
                 </Button>
-                <Button fx:id="leaveButton" text="Покинуть группу">
+                <Button fx:id="leaveButton" text="Leave Group">
                     <graphic>
                         <FontAwesomeIconView glyphName="SIGN_OUT" styleClass="glyph-icon"/>
                     </graphic>
@@ -73,8 +73,8 @@
                         </center>
                         <bottom>
                             <HBox spacing="10" styleClass="input-box">
-                                <TextField fx:id="inputBroadcast" HBox.hgrow="ALWAYS" promptText="Ваше сообщение..."/>
-                                <Button fx:id="sendBroadcast" text="Отправить" styleClass="send-button">
+                                <TextField fx:id="inputBroadcast" HBox.hgrow="ALWAYS" promptText="Your message..."/>
+                                <Button fx:id="sendBroadcast" text="Send" styleClass="send-button">
                                     <graphic>
                                         <FontAwesomeIconView glyphName="SEND" styleClass="glyph-icon"/>
                                     </graphic>
@@ -90,12 +90,12 @@
                         </center>
                         <bottom>
                             <VBox>
-                                <Label fx:id="mutedLabel" text="Вы заблокированы хостом в этой группе"
+                                <Label fx:id="mutedLabel" text="You have been banned by the host in this group"
                                        styleClass="muted-label" visible="false" managed="false"/>
                                 <HBox spacing="10" styleClass="input-box">
                                     <TextField fx:id="inputMulticast" HBox.hgrow="ALWAYS"
-                                               promptText="Сообщение в группу..."/>
-                                    <Button fx:id="sendMulticast" text="Отправить" styleClass="send-button">
+                                               promptText="Message to group..."/>
+                                    <Button fx:id="sendMulticast" text="Send" styleClass="send-button">
                                         <graphic>
                                             <FontAwesomeIconView glyphName="SEND" styleClass="glyph-icon"/>
                                         </graphic>
@@ -112,7 +112,7 @@
                     <Insets top="10" right="10" bottom="10" left="10"/>
                 </padding>
                 <HBox alignment="CENTER_LEFT">
-                    <Label text="Участники"/>
+                    <Label text="Participants"/>
                     <Region HBox.hgrow="ALWAYS"/>
                     <Button fx:id="refreshPeersButton" styleClass="button-transparent">
                         <graphic>
@@ -124,7 +124,7 @@
 
                 <Separator/>
 
-                <Label text="Забанены (в группе)"/>
+                <Label text="Banned (in group)"/>
                 <ListView fx:id="bannedList" VBox.vgrow="ALWAYS" prefHeight="100"/>
             </VBox>
         </SplitPane>

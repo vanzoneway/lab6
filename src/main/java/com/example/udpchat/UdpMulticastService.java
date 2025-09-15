@@ -1,3 +1,4 @@
+// UdpMulticastService.java
 package com.example.udpchat;
 
 import java.io.IOException;
@@ -37,10 +38,12 @@ public class UdpMulticastService {
 
     public synchronized void setTtl(int ttl) {
         this.ttl = Math.max(1, Math.min(ttl, 32));
-        if (socket != null) {
+        if (socket != null && !socket.isClosed()) {
             try {
                 socket.setTimeToLive(this.ttl);
-            } catch (IOException ignored) {
+            } catch (IOException e) {
+                System.err.println("Warning: Could not set TTL on multicast socket.");
+                e.printStackTrace();
             }
         }
     }
@@ -54,8 +57,8 @@ public class UdpMulticastService {
     }
 
     public synchronized void switchGroup(InetAddress newGroup) throws IOException {
-        if (newGroup == null) throw new IOException("Group is null");
-        if (joined && group != null && group.equals(newGroup)) return;
+        if (newGroup == null) throw new IOException("Multicast group cannot be null.");
+        if (joined && group != null && group.equals(newGroup)) return; // Already in the correct group
         if (joined) leave();
         this.group = newGroup;
         join();
@@ -64,66 +67,67 @@ public class UdpMulticastService {
     public synchronized void join() throws IOException {
         if (joined) return;
 
-        // Создаем сокет
+        // Create the socket
         try {
             socket = new MulticastSocket(port);
-            System.out.println("[DEBUG] MulticastSocket успешно создан на порту " + port);
+            System.out.println("[DEBUG] MulticastSocket created successfully on port " + port);
         } catch (IOException e) {
-            System.err.println("!!! ОШИБКА: Не удалось создать MulticastSocket на порту " + port);
+            System.err.println("!!! ERROR: Failed to create MulticastSocket on port " + port);
             e.printStackTrace();
             throw e;
         }
 
-        // --- Каждая настройка будет в отдельном try-catch для детальной диагностики ---
+        // --- Each setup step is in a separate try-catch for detailed diagnostics ---
 
         try {
-            System.out.println("[DEBUG] -> Настройка: setReuseAddress(true)...");
+            System.out.println("[DEBUG] -> Configuring: setReuseAddress(true)...");
             socket.setReuseAddress(true);
         } catch (IOException e) {
-            System.err.println("!!! ОШИБКА на этапе setReuseAddress:");
+            System.err.println("!!! ERROR during setReuseAddress:");
             e.printStackTrace();
             throw e;
         }
 
         try {
-            System.out.println("[DEBUG] -> Настройка: setNetworkInterface для " + iface.nif.getDisplayName() + "...");
+            System.out.println("[DEBUG] -> Configuring: setNetworkInterface for " + iface.nif.getDisplayName() + "...");
             socket.setNetworkInterface(iface.nif);
         } catch (IOException e) {
-            System.err.println("!!! ОШИБКА на этапе setNetworkInterface. Вероятно, проблема в выбранном сетевом интерфейсе!");
+            System.err.println("!!! ERROR during setNetworkInterface. This is likely due to the selected network interface!");
             e.printStackTrace();
             throw e;
         }
 
         try {
-            System.out.println("[DEBUG] -> Настройка: setTimeToLive(" + ttl + ")...");
+            System.out.println("[DEBUG] -> Configuring: setTimeToLive(" + ttl + ")...");
             socket.setTimeToLive(ttl);
         } catch (IOException e) {
-            System.err.println("!!! ОШИБКА на этапе setTimeToLive:");
+            System.err.println("!!! ERROR during setTimeToLive:");
             e.printStackTrace();
             throw e;
         }
 
         try {
-            System.out.println("[DEBUG] -> Настройка: setLoopbackMode(false)...");
+            System.out.println("[DEBUG] -> Configuring: setLoopbackMode(false)...");
             socket.setLoopbackMode(false);
         } catch (Exception e) {
-            System.err.println("!!! ПРЕДУПРЕЖДЕНИЕ: Не удалось отключить LoopbackMode (не критично)");
+            System.err.println("!!! WARNING: Failed to disable LoopbackMode (this is not critical)");
             e.printStackTrace();
         }
 
-        // Присоединение к группе
+        // Join the multicast group
         try {
-            System.out.println("[DEBUG] -> Присоединение к группе " + group + " через интерфейс " + iface.nif.getName() + "...");
+            System.out.println("[DEBUG] -> Joining group " + group + " via interface " + iface.nif.getName() + "...");
             socket.joinGroup(new InetSocketAddress(group, port), iface.nif);
-            System.out.println("[DEBUG] -> УСПЕШНО присоединились к группе.");
+            System.out.println("[DEBUG] -> SUCCESSFULLY joined group.");
         } catch (IOException e) {
-            System.err.println("!!! ОШИБКА на этапе joinGroup. Проверьте адрес группы и настройки брандмауэра.");
+            System.err.println("!!! ERROR during joinGroup. Check the group address and firewall settings.");
             e.printStackTrace();
             throw e;
         }
 
+        // Start the listener thread
         exec = Executors.newSingleThreadExecutor(r -> {
-            Thread t = new Thread(r, "UDP-Multicast-Receiver");
+            Thread t = new Thread(r, "UDP-Multicast-Receiver-Thread");
             t.setDaemon(true);
             return t;
         });
@@ -142,7 +146,10 @@ public class UdpMulticastService {
                     if (parsed != null) listener.onMessage(UdpTransport.MULTICAST, pkt.getAddress(), parsed, group);
                 }
             } catch (IOException e) {
-                if (joined) e.printStackTrace();
+                if (joined) {
+                    System.err.println("Error receiving multicast packet.");
+                    e.printStackTrace();
+                }
             }
         }
     }
@@ -151,8 +158,13 @@ public class UdpMulticastService {
         if (!joined) return;
         joined = false;
         try {
-            socket.leaveGroup(new InetSocketAddress(group, port), iface.nif);
-            System.out.println("[DEBUG] Успешно покинули группу " + group);
+            if (socket != null) {
+                socket.leaveGroup(new InetSocketAddress(group, port), iface.nif);
+                System.out.println("[DEBUG] Successfully left group " + group);
+            }
+        } catch (IOException e) {
+            System.err.println("Error while trying to leave multicast group.");
+            e.printStackTrace();
         } finally {
             if (socket != null && !socket.isClosed()) socket.close();
             if (exec != null) exec.shutdownNow();
@@ -161,7 +173,7 @@ public class UdpMulticastService {
     }
 
     public synchronized void send(String type, Map<String, String> headers, String payload) throws IOException {
-        if (!joined || socket == null) throw new IOException("Not joined to multicast group");
+        if (!joined || socket == null) throw new IOException("Not joined to a multicast group");
         if (host) headers.put("host", "1");
         headers.put("grp", group.getHostAddress());
         byte[] data = MessageProtocol.build(type, headers, payload);

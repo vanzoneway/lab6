@@ -1,3 +1,4 @@
+// ChatController.java
 package com.example.udpchat;
 
 import javafx.animation.FadeTransition;
@@ -18,11 +19,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 public class ChatController implements UdpMessageListener {
 
-    // --- FXML поля для UI элементов ---
+    // --- FXML UI Fields ---
     @FXML private ListView<ChatMessage> chatBroadcast;
     @FXML private ListView<ChatMessage> chatMulticast;
     @FXML private TextField inputBroadcast;
@@ -47,13 +47,13 @@ public class ChatController implements UdpMessageListener {
     @FXML private ListView<String> bannedList;
     @FXML private TextField nickField;
 
-    // --- Списки для хранения сообщений и участников ---
+    // --- Data Lists for UI ---
     private final ObservableList<ChatMessage> broadcastMessages = FXCollections.observableArrayList();
     private final ObservableList<ChatMessage> multicastMessages = FXCollections.observableArrayList();
     private final ObservableList<String> peers = FXCollections.observableArrayList();
     private final ObservableList<String> bannedItems = FXCollections.observableArrayList();
 
-    // --- Сетевые и служебные компоненты ---
+    // --- Network & Service Components ---
     private final Map<String, String> nickByIp = new ConcurrentHashMap<>();
     private final BlocklistManager blocklist = new BlocklistManager();
     private final RecentMessageCache dedup = new RecentMessageCache(4096, 30_000);
@@ -62,7 +62,7 @@ public class ChatController implements UdpMessageListener {
     private UdpMulticastService mcastService;
     private PeerDiscoveryService discovery;
 
-    // --- Состояние чата ---
+    // --- Chat State ---
     private final AtomicBoolean joined = new AtomicBoolean(false);
     private String currentGroupAddr = null;
     private final Map<String, Boolean> seenInMulticast = new ConcurrentHashMap<>();
@@ -70,21 +70,18 @@ public class ChatController implements UdpMessageListener {
     private volatile boolean mutedByHost = false;
     private volatile String groupHostIp = null;
 
-    // --- Константы ---
+    // --- Constants ---
     private static final int DEFAULT_PORT = 50000;
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     @FXML
     public void initialize() {
-        // Инициализация UI элементов
         modeChoice.getItems().addAll("Broadcast", "Multicast");
         modeChoice.setValue("Broadcast");
-
         multicastGroupField.setText("239.255.0.1");
         portField.setText(String.valueOf(DEFAULT_PORT));
         nickField.setText("user-" + (int) (Math.random() * 1000));
 
-        // Настройка фабрик ячеек для всех списков
         setupChatListView(chatBroadcast, broadcastMessages);
         setupChatListView(chatMulticast, multicastMessages);
         peersList.setItems(peers);
@@ -93,21 +90,20 @@ public class ChatController implements UdpMessageListener {
         bannedList.setItems(bannedItems);
         setupBannedListContextMenu();
 
-        // Автоопределение сетевых интерфейсов
         try {
             List<NetworkUtils.IfaceInfo> ifaces = NetworkUtils.enumerateIPv4Interfaces();
             if (ifaces.isEmpty()) {
-                showError("Нет активных сетевых интерфейсов IPv4.");
+                showError("No active IPv4 network interfaces found.");
                 return;
             }
             ifaceCombo.getItems().addAll(ifaces);
             ifaceCombo.getSelectionModel().select(0);
             onInterfaceSelected();
         } catch (Exception e) {
-            showError("Ошибка при определении сети: " + e.getMessage());
+            e.printStackTrace();
+            showError("Error detecting network interfaces: " + e.getMessage());
         }
 
-        // Назначение обработчиков событий
         sendBroadcast.setOnAction(e -> sendMessage(UdpTransport.BROADCAST));
         inputBroadcast.setOnAction(e -> sendMessage(UdpTransport.BROADCAST));
         sendMulticast.setOnAction(e -> sendMessage(UdpTransport.MULTICAST));
@@ -121,7 +117,6 @@ public class ChatController implements UdpMessageListener {
         modeChoice.setOnAction(e -> onModeChanged());
         refreshPeersButton.setOnAction(e -> refreshPeersListManual());
 
-        // Обновление UI в соответствии с начальным состоянием
         refreshUiForMode();
         updateMutedUi();
     }
@@ -138,7 +133,6 @@ public class ChatController implements UdpMessageListener {
                 super.updateItem(ip, empty);
                 if (empty || ip == null) {
                     setText(null);
-                    setGraphic(null);
                 } else {
                     String nick = nickByIp.getOrDefault(ip, "");
                     setText(nick.isBlank() ? ip : ip + " — " + nick);
@@ -149,19 +143,17 @@ public class ChatController implements UdpMessageListener {
 
     private void setupPeersListContextMenu() {
         ContextMenu menu = new ContextMenu();
-        MenuItem ignore = new MenuItem("Игнорировать (локально)");
-        MenuItem unignore = new MenuItem("Снять игнор (локально)");
-        MenuItem banInGroup = new MenuItem("Заблокировать в группе (хост)");
-        MenuItem unbanInGroup = new MenuItem("Снять блок в группе (хост)");
+        MenuItem ignore = new MenuItem("Ignore (Local)");
+        MenuItem unignore = new MenuItem("Unignore (Local)");
+        MenuItem banInGroup = new MenuItem("Ban in Group (Host)");
+        MenuItem unbanInGroup = new MenuItem("Unban in Group (Host)");
 
         ignore.setOnAction(e -> handlePeerAction(this::doLocalBlock));
-        unignore.setOnAction(e -> handlePeerAction(blocklist::unblock));
-
+        unignore.setOnAction(e -> handlePeerAction(this::doLocalUnblock));
         banInGroup.setOnAction(e -> handlePeerAction(ip -> sendHostBan(true, ip)));
         unbanInGroup.setOnAction(e -> handlePeerAction(ip -> sendHostBan(false, ip)));
 
         menu.getItems().addAll(ignore, unignore, new SeparatorMenuItem(), banInGroup, unbanInGroup);
-
         peersList.setContextMenu(menu);
         peersList.setOnMouseClicked(event -> {
             if (event.getButton() == MouseButton.SECONDARY) {
@@ -171,31 +163,33 @@ public class ChatController implements UdpMessageListener {
     }
 
     private void doLocalBlock(String ip) {
-        String selfIp = currentIface != null ? currentIface.address.getHostAddress() : null;
+        String selfIp = (currentIface != null) ? currentIface.address.getHostAddress() : null;
         if (ip.equals(selfIp)) {
-            showError("Нельзя игнорировать свой собственный IP.");
+            showError("You cannot ignore your own IP address.");
             return;
         }
         blocklist.block(ip);
-        appendSysMessage("Локально игнорируется " + pretty(ip));
+        appendSysMessage("Locally ignoring " + pretty(ip));
+    }
+
+    private void doLocalUnblock(String ip) {
+        blocklist.unblock(ip);
+        appendSysMessage("Stopped ignoring " + pretty(ip));
     }
 
     private void handlePeerAction(java.util.function.Consumer<String> action) {
         String ip = peersList.getSelectionModel().getSelectedItem();
-        if (ip != null) {
-            action.accept(ip);
-        }
+        if (ip != null) action.accept(ip);
     }
 
     private void setupBannedListContextMenu() {
         ContextMenu menu = new ContextMenu();
-        MenuItem unban = new MenuItem("Снять блок (хост)");
+        MenuItem unban = new MenuItem("Unban (Host)");
         unban.setOnAction(e -> {
             String ip = bannedList.getSelectionModel().getSelectedItem();
             if (ip != null) sendHostBan(false, ip);
         });
         menu.getItems().add(unban);
-
         bannedList.setContextMenu(menu);
         bannedList.setOnMouseClicked(event -> {
             if (event.getButton() == MouseButton.SECONDARY) {
@@ -237,18 +231,14 @@ public class ChatController implements UdpMessageListener {
     private void updateMutedUi() {
         boolean show = isMulticastMode() && mutedByHost;
         if (mutedLabel.isVisible() == show) return;
-
         if (show) {
             mutedLabel.setVisible(true);
             mutedLabel.setManaged(true);
             FadeTransition ft = new FadeTransition(Duration.millis(300), mutedLabel);
-            ft.setFromValue(0);
-            ft.setToValue(1);
-            ft.play();
+            ft.setFromValue(0); ft.setToValue(1); ft.play();
         } else {
             FadeTransition ft = new FadeTransition(Duration.millis(300), mutedLabel);
-            ft.setFromValue(1);
-            ft.setToValue(0);
+            ft.setFromValue(1); ft.setToValue(0);
             ft.setOnFinished(e -> {
                 mutedLabel.setVisible(false);
                 mutedLabel.setManaged(false);
@@ -285,20 +275,24 @@ public class ChatController implements UdpMessageListener {
                         @Override public InetAddress currentMulticastGroup() {
                             try {
                                 return joined.get() ? InetAddress.getByName(multicastGroupField.getText()) : null;
-                            } catch (Exception e) { return null; }
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                                return null;
+                            }
                         }
                     }
             );
             discovery.start();
         } catch (Exception e) {
-            showError("Не удалось запустить службы: " + e.getMessage());
+            e.printStackTrace();
+            showError("Failed to start network services: " + e.getMessage());
         }
     }
 
     private void stopServices() {
         if (discovery != null) discovery.stop();
         if (bcastService != null) bcastService.stop();
-        if (mcastService != null) try { mcastService.leave(); } catch (IOException ignored) {}
+        if (mcastService != null) try { mcastService.leave(); } catch (IOException e) { e.printStackTrace(); }
         joined.set(false);
         currentGroupAddr = null;
         seenInMulticast.clear();
@@ -323,12 +317,13 @@ public class ChatController implements UdpMessageListener {
             mutedByHost = false;
             groupHostIp = hostMulticast.isSelected() && currentIface != null ? currentIface.address.getHostAddress() : null;
 
-            appendSysMessage("Вошли в группу " + currentGroupAddr + ":" + portField.getText()
-                    + (hostMulticast.isSelected() ? " (вы — хост)" : ""));
+            appendSysMessage("Joined group " + currentGroupAddr + ":" + portField.getText()
+                    + (hostMulticast.isSelected() ? " (as host)" : ""));
             refreshUiForMode();
             updateMutedUi();
         } catch (Exception e) {
-            showError("Ошибка входа в группу: " + e.getMessage());
+            e.printStackTrace();
+            showError("Failed to join group: " + e.getMessage());
         }
     }
 
@@ -336,7 +331,7 @@ public class ChatController implements UdpMessageListener {
         try {
             if (mcastService != null && mcastService.isJoined()) {
                 mcastService.leave();
-                appendSysMessage("Покинули группу " + currentGroupAddr);
+                appendSysMessage("Left group " + currentGroupAddr);
             }
             joined.set(false);
             currentGroupAddr = null;
@@ -348,14 +343,15 @@ public class ChatController implements UdpMessageListener {
             refreshUiForMode();
             updateMutedUi();
         } catch (Exception e) {
-            showError("Ошибка выхода из группы: " + e.getMessage());
+            e.printStackTrace();
+            showError("Error leaving group: " + e.getMessage());
         }
     }
 
     private void refreshPeersListManual() {
         if (discovery == null) return;
         List<String> all = discovery.snapshotAllPeers();
-        String selfIp = currentIface != null ? currentIface.address.getHostAddress() : null;
+        String selfIp = (currentIface != null) ? currentIface.address.getHostAddress() : null;
         if (selfIp != null) all.remove(selfIp);
         peers.setAll(all);
     }
@@ -376,7 +372,7 @@ public class ChatController implements UdpMessageListener {
 
         if ("1".equals(msg.headers.get("host")) && groupHostIp == null) {
             groupHostIp = fromIp;
-            appendSysMessage("Определён хост группы: " + pretty(groupHostIp));
+            appendSysMessage("Group host identified: " + pretty(groupHostIp));
         }
         if (blocklist.isBlocked(from) && MessageProtocol.TYPE_CHAT.equals(msg.type)) return;
 
@@ -396,18 +392,18 @@ public class ChatController implements UdpMessageListener {
                 if (isBlock) mcastHostBans.add(target); else mcastHostBans.remove(target);
                 Platform.runLater(this::syncBannedItems);
 
-                String actionText = isBlock ? "заблокировал" : "разблокировал";
+                String actionText = isBlock ? "banned" : "unbanned";
                 if (currentIface != null && target.equals(currentIface.address.getHostAddress())) {
                     mutedByHost = isBlock;
-                    String selfStatus = isBlock ? "Вы заблокированы хостом" : "Хост снял блок";
-                    appendSysMessage(selfStatus + " и не можете писать в эту группу.");
+                    String selfStatus = isBlock ? "You have been banned by the host" : "The host has unbanned you";
+                    appendSysMessage(selfStatus);
                     refreshUiForMode();
                     updateMutedUi();
                 } else {
-                    appendSysMessage("Хост " + actionText + " " + pretty(target));
+                    appendSysMessage("Host " + actionText + " " + pretty(target));
                 }
             }
-            default -> {} // HELLO обрабатывается в discovery, другие типы игнорируем
+            default -> {} // HELLO is handled by discovery, other types are ignored
         }
     }
 
@@ -423,12 +419,12 @@ public class ChatController implements UdpMessageListener {
 
     private void sendHostBan(boolean ban, String ip) {
         if (!isMulticastMode() || !joined.get() || !hostMulticast.isSelected()) {
-            showError("Эта функция доступна только хосту в активной Multicast группе.");
+            showError("This function is only available to the host of an active Multicast group.");
             return;
         }
-        String selfIp = currentIface != null ? currentIface.address.getHostAddress() : null;
+        String selfIp = (currentIface != null) ? currentIface.address.getHostAddress() : null;
         if (ip.equals(selfIp)) {
-            showError("Нельзя заблокировать самого себя.");
+            showError("You cannot ban yourself.");
             return;
         }
         try {
@@ -436,12 +432,13 @@ public class ChatController implements UdpMessageListener {
             h.put("id", MessageIds.next());
             h.put("target", ip);
             mcastService.send(ban ? MessageProtocol.TYPE_MBLOCK : MessageProtocol.TYPE_MUNBLOCK, h, "");
-            String action = ban ? "заблокирован" : "разблокирован";
+            String action = ban ? "banned" : "unbanned";
             if (ban) mcastHostBans.add(ip); else mcastHostBans.remove(ip);
             syncBannedItems();
-            appendSysMessage("Хост: " + action + " " + pretty(ip));
+            appendSysMessage("Host: " + action + " " + pretty(ip));
         } catch (IOException ex) {
-            showError("Ошибка отправки команды: " + ex.getMessage());
+            ex.printStackTrace();
+            showError("Error sending command: " + ex.getMessage());
         }
     }
 
@@ -467,19 +464,19 @@ public class ChatController implements UdpMessageListener {
             if (transport == UdpTransport.BROADCAST) {
                 bcastService.send(MessageProtocol.TYPE_CHAT, h, text);
             } else {
-                if (!joined.get()) { showError("Multicast: сначала Join."); return; }
-                if (mutedByHost) { showError("Вы заблокированы хостом."); return; }
+                if (!joined.get()) { showError("Multicast: Must join a group first."); return; }
+                if (mutedByHost) { showError("You are banned by the host."); return; }
                 mcastService.send(MessageProtocol.TYPE_CHAT, h, text);
             }
 
-            String selfIp = currentIface != null ? currentIface.address.getHostAddress() : "local";
-            assert nick != null;
+            String selfIp = (currentIface != null) ? currentIface.address.getHostAddress() : "local";
             ChatMessage selfMsg = new ChatMessage(
-                    (nick.isBlank() ? "Вы" : nick), selfIp, text, formatTs(Long.toString(nowTs)), true);
+                    (nick.isBlank() ? "You" : nick), selfIp, text, formatTs(Long.toString(nowTs)), true);
             addChatMessage(selfMsg, transport);
             input.clear();
         } catch (IOException e) {
-            showError("Ошибка отправки: " + e.getMessage());
+            e.printStackTrace();
+            showError("Send error: " + e.getMessage());
         }
     }
 
@@ -496,7 +493,7 @@ public class ChatController implements UdpMessageListener {
     private void showError(String msg) {
         Platform.runLater(() -> {
             Alert a = new Alert(Alert.AlertType.ERROR, msg, ButtonType.OK);
-            a.setHeaderText("Ошибка");
+            a.setHeaderText("Error");
             a.showAndWait();
         });
     }
@@ -504,9 +501,9 @@ public class ChatController implements UdpMessageListener {
     private String formatTs(String tsHeader) {
         try {
             long ms = (tsHeader == null || tsHeader.isBlank()) ? System.currentTimeMillis() : Long.parseLong(tsHeader);
-            LocalDateTime ldt = LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneId.systemDefault());
-            return TIME_FMT.format(ldt);
+            return TIME_FMT.format(LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneId.systemDefault()));
         } catch (Exception e) {
+            e.printStackTrace();
             return TIME_FMT.format(LocalDateTime.now());
         }
     }

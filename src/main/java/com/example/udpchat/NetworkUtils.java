@@ -1,3 +1,4 @@
+// NetworkUtils.java
 package com.example.udpchat;
 
 import java.net.Inet4Address;
@@ -27,7 +28,7 @@ public class NetworkUtils {
 
         @Override
         public String toString() {
-            return nif.getName() + " - " + address.getHostAddress();
+            return nif.getDisplayName() + " - " + address.getHostAddress();
         }
     }
 
@@ -39,60 +40,33 @@ public class NetworkUtils {
             try {
                 if (!nif.isUp() || nif.isLoopback() || nif.isVirtual()) continue;
             } catch (SocketException ex) {
+                // Ignore interfaces that cause exceptions on inspection
                 continue;
             }
             for (InterfaceAddress ia : nif.getInterfaceAddresses()) {
                 InetAddress addr = ia.getAddress();
                 if (!(addr instanceof Inet4Address)) continue;
-                short prefix = ia.getNetworkPrefixLength();
-                String netmask = prefixLengthToNetmask(prefix);
-                InetAddress bcast = ia.getBroadcast();
-                if (bcast == null) {
-                    try {
-                        bcast = computeBroadcast((Inet4Address) addr, prefix);
-                    } catch (UnknownHostException ignored) {
-                    }
-                }
-                list.add(new IfaceInfo(nif, addr, netmask, bcast));
+                list.add(new IfaceInfo(nif, addr,
+                        prefixLengthToNetmask(ia.getNetworkPrefixLength()),
+                        ia.getBroadcast()));
             }
         }
         return list;
     }
 
-    public static String prefixLengthToNetmask(short prefix) {
-        int value = 0xffffffff << (32 - prefix);
-        byte[] bytes = new byte[] {
-                (byte) (value >>> 24),
-                (byte) (value >> 16 & 0xff),
-                (byte) (value >> 8 & 0xff),
-                (byte) (value & 0xff)
-        };
+    private static String prefixLengthToNetmask(short prefix) {
         try {
+            int value = 0xffffffff << (32 - prefix);
+            byte[] bytes = new byte[]{
+                    (byte) (value >>> 24),
+                    (byte) (value >> 16 & 0xff),
+                    (byte) (value >> 8 & 0xff),
+                    (byte) (value & 0xff)
+            };
             return InetAddress.getByAddress(bytes).getHostAddress();
         } catch (UnknownHostException e) {
+            e.printStackTrace();
             return "0.0.0.0";
         }
-    }
-
-    public static InetAddress computeBroadcast(Inet4Address ip, short prefix) throws UnknownHostException {
-        int ipInt = byteArrayToInt(ip.getAddress());
-        int mask = 0xffffffff << (32 - prefix);
-        int broadcast = (ipInt & mask) | (~mask);
-        return InetAddress.getByName(intToIp(broadcast));
-    }
-
-    public static int byteArrayToInt(byte[] bytes) {
-        int value = 0;
-        for (byte b : bytes) {
-            value = (value << 8) + (b & 0xFF);
-        }
-        return value;
-    }
-
-    public static String intToIp(int ip) {
-        return ((ip >> 24) & 0xFF) + "." +
-               ((ip >> 16) & 0xFF) + "." +
-               ((ip >> 8) & 0xFF) + "." +
-               (ip & 0xFF);
     }
 }

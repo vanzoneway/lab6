@@ -2,7 +2,6 @@
 package com.example.udpchat;
 
 import javafx.animation.FadeTransition;
-import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
@@ -18,7 +17,7 @@ public class ChatCell extends ListCell<ChatMessage> {
 
     public ChatCell() {
         container.setSpacing(4);
-        messageText.setWrappingWidth(350); // Ограничиваем ширину текста
+        messageText.setWrappingWidth(350); // Limit the wrapping width of the text
         container.getChildren().addAll(authorLabel, messageText, timeLabel);
     }
 
@@ -36,7 +35,7 @@ public class ChatCell extends ListCell<ChatMessage> {
                 container.setAlignment(Pos.CENTER_RIGHT);
                 authorLabel.setAlignment(Pos.CENTER_RIGHT);
                 timeLabel.setAlignment(Pos.CENTER_RIGHT);
-                // Тут можно было бы добавить стиль, но мы сделаем это через CSS в ListView
+                // A style could be added here, but we'll do it via CSS in the ListView
             } else {
                 container.setAlignment(Pos.CENTER_LEFT);
                 authorLabel.setAlignment(Pos.CENTER_LEFT);
@@ -44,7 +43,7 @@ public class ChatCell extends ListCell<ChatMessage> {
             }
             setGraphic(container);
 
-// Анимация появления нового сообщения
+            // Animate the appearance of a new message
             FadeTransition ft = new FadeTransition(Duration.millis(500), container);
             ft.setFromValue(0.0);
             ft.setToValue(1.0);
